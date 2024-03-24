@@ -10,7 +10,9 @@
    - Main error scenarios are handled by API ("Product not found" error).
 4. Link to Product Service API:
    Product List: https://800hohvpog.execute-api.eu-west-1.amazonaws.com/dev/products
+
    Product by id: https://800hohvpog.execute-api.eu-west-1.amazonaws.com/dev/products/{productId}
+
    Example: https://800hohvpog.execute-api.eu-west-1.amazonaws.com/dev/products/1
 
 5. Link to FE PR - https://github.com/AlehBabkevich/shop-react-redux-cloudfront/tree/task-3
