@@ -1,14 +1,11 @@
 "use strict";
 
-import { mockData } from "./mockData.js";
+import { dynamoClient } from "../dynamoDB.js";
 
 const getProductsById = async ({ pathParameters }) => {
   const productId = pathParameters?.productId;
-
   try {
-    const product = await mockData.getProductById(productId);
-    if (!product) throw new Error("Product not found");
-
+    const product = await dynamoClient.getProductsByIdFromDB(productId);
     return {
       statusCode: 200,
       headers: {
@@ -19,7 +16,7 @@ const getProductsById = async ({ pathParameters }) => {
     };
   } catch (error) {
     return {
-      statusCode: 404,
+      statusCode: 500,
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Credentials": true,

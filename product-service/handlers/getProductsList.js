@@ -1,20 +1,21 @@
 "use strict";
-import { mockData } from "./mockData.js";
+
+import { dynamoClient } from "../dynamoDB.js";
 
 const getProductsList = async (event) => {
   try {
-    const products = await mockData.getProducts();
+    const productsList = await dynamoClient.getProductsListFromDB();
     return {
       statusCode: 200,
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Credentials": true,
       },
-      body: JSON.stringify(products),
+      body: JSON.stringify(productsList),
     };
   } catch (error) {
     return {
-      statusCode: 404,
+      statusCode: 500,
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Credentials": true,
