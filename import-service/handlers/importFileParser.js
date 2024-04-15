@@ -1,14 +1,41 @@
 import {
   S3Client,
   GetObjectCommand,
-  GetObjectCommandOutput,
   CopyObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
-
+import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import csv from "csv-parser";
+import { v4 as uuidv4 } from "uuid";
 
-const client = new S3Client({ region: "eu-west-1" });
+const region = "eu-west-1";
+const clientS3 = new S3Client({ region });
+const clientSQS = new SQSClient({ region });
+const bucket = "import-bucket-aws";
+
+const headers = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Credentials": true,
+};
+
+const queue = async (msg) => {
+  const command = new SendMessageCommand({
+    QueueUrl:
+      "https://sqs.eu-west-1.amazonaws.com/851725410077/CatalogItemsQueue",
+    MessageBody: msg,
+  });
+
+  const data = await clientSQS.send(command);
+};
+
+const sendToQueue = async (stream) => {
+  const products = await parseStream(stream);
+  console.log("sendToQueue -> products: ", products);
+
+  for (const product of products) {
+    await queue(JSON.stringify(product));
+  }
+};
 
 const getObject = async ({ bucket, key }) => {
   const command = new GetObjectCommand({
@@ -16,7 +43,7 @@ const getObject = async ({ bucket, key }) => {
     Key: key,
   });
 
-  const commandResult: GetObjectCommandOutput = await client.send(command);
+  const commandResult = await clientS3.send(command);
 
   return commandResult.Body;
 };
@@ -32,7 +59,7 @@ const copyObject = async (bucket, folder, objectName, folderToMove) => {
   });
 
   try {
-    const response = await client.send(command);
+    const response = await clientS3.send(command);
   } catch (err) {
     console.error(err);
   }
@@ -45,20 +72,20 @@ const deleteObject = async (bucket, key) => {
   });
 
   try {
-    const response = await client.send(command);
+    const response = await clientS3.send(command);
   } catch (err) {
     console.error(err);
   }
 };
 
-const parse = (stream) => {
+const parseStream = (stream) => {
   return new Promise((resolve, reject) => {
     const results = [];
 
     stream
-      .pipe(csv())
+      .pipe(csv({ separator: "," }))
       .on("data", (data) => {
-        console.log("CSV Record:", data);
+        console.log("parse -> data: ", data);
         results.push(data);
       })
       .on("end", () => {
@@ -74,29 +101,29 @@ const parse = (stream) => {
 
 const importFileParser = async (event) => {
   try {
-    console.log("importFileParser -> event: ", event);
-    const bucket = "import-bucket-aws";
     const key = event.Records[0].s3.object.key;
     const s3Stream = await getObject({
       bucket,
       key,
     });
+    await sendToQueue(s3Stream);
 
     const [folder, objectName] = key.split("/");
     await copyObject(bucket, folder, objectName, "parsed");
 
     await deleteObject(bucket, key);
 
-    return parse(s3Stream);
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: `All line have been processed.` }),
+    };
   } catch (error) {
     return {
       statusCode: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Credentials": true,
-      },
+      headers,
       body: JSON.stringify({
-        error: "An error occurred",
+        message: `Error: ${error}`,
       }),
     };
   }

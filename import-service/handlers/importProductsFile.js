@@ -1,5 +1,6 @@
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import AWS from "aws-sdk";
+
+const s3 = new AWS.S3({ region: "eu-west-1" });
 
 const importProductsFile = async (event) => {
   try {
@@ -10,7 +11,7 @@ const importProductsFile = async (event) => {
     };
     const fileName = event.queryStringParameters.name;
 
-    if (!nafileNameme) {
+    if (!fileName) {
       return {
         statusCode: 400,
         headers,
@@ -21,19 +22,18 @@ const importProductsFile = async (event) => {
     const region = "eu-west-1";
     const bucket = "import-bucket-aws";
 
-    const client = new S3Client({ region });
-    const command = new GetObjectCommand({
+    const params = {
       Bucket: bucket,
       Key: fileKey,
       Expires: 3600,
       ContentType: "text/csv",
-    });
-    const url = getSignedUrl(client, command, { expiresIn: 3600 });
+    };
+    const url = await s3.getSignedUrl("putObject", params);
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(url),
     };
   } catch (error) {
     return {
