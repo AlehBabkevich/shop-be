@@ -1,0 +1,101 @@
+service: import-service-aws
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: eu-west-1
+
+  environment:
+    SQS_URL: https://sqs.eu-west-1.amazonaws.com/851725410077/CatalogItemsQueue
+    SNS_ARN:
+      Ref: SNSTopic
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:ListBucket
+            - s3:CopyObject
+            - s3:DeleteObject
+          Resource: arn:aws:s3:::import-bucket-aws/*
+          Sid: AllowPublic
+        - Effect: Allow
+          Action:
+            - sqs:*
+          Resource:
+            - arn:aws:sqs:eu-west-1:851725410077:CatalogItemsQueue
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeTable
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:eu-west-1:851725410077:table/products
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeTable
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:eu-west-1:851725410077:table/stocks
+        - Effect: "Allow"
+          Action: "sns:*"
+          Resource:
+            Ref: SNSTopic
+
+functions:
+  importProductsFile:
+    handler: handler.importProductsFile
+    events:
+      - http:
+          path: import
+          method: get
+          cors: true
+  importFileParser:
+    handler: handler.importFileParser
+    events:
+      - s3:
+          bucket: import-bucket-aws
+          event: s3:ObjectCreated:*
+          existing: true
+          rules:
+            - prefix: uploaded/
+            - suffix: .csv
+  catalogBatchProcess:
+    handler: handler.catalogBatchProcess
+    events:
+      - sqs:
+          batchSize: 5
+          arn:
+            Fn::GetAtt:
+              - CatalogItemsQueue
+              - Arn
+
+resources:
+  Resources:
+    CatalogItemsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: CatalogItemsQueue
+    SNSTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: createProductTopic
+    SNSSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Endpoint: aleh_babkevich@epam.com
+        Protocol: email
+        TopicArn:
+          Ref: SNSTopic
